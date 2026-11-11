@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NetLab · UDP and TCP, packet by packet</title>
+    <meta
+      name="description"
+      content="A visual lab for UDP and TCP. Send text and images over a simulated network with delay, jitter and packet loss, and watch every packet. Written in Go, running in your browser."
+    />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'><rect width='16' height='16' fill='%23000080'/><rect x='2' y='3' width='5' height='4' fill='%2300ffff'/><rect x='9' y='9' width='5' height='4' fill='%23ff66cc'/><rect x='7' y='5' width='2' height='1' fill='%23fff'/><rect x='8' y='6' width='1' height='4' fill='%23fff'/></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&family=VT323&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="logo">
+        <span class="logo-mark" aria-hidden="true">
+          <i></i><i></i><i></i>
+        </span>
+        <div>
+          <h1>NetLab</h1>
+          <p>UDP &amp; TCP, packet by packet</p>
+        </div>
+      </div>
+      <nav class="links">
+        <a href="#about">About</a>
+        <a href="https://github.com/rahelmartim/go-netlab" target="_blank" rel="noopener noreferrer">Source</a>
+      </nav>
+    </header>
+
+    <div class="marquee" aria-hidden="true">
+      <span>
+        ★ Welcome to NetLab ★ Every packet is simulated in Go, compiled to WebAssembly ★ Turn up the packet loss and watch TCP fight back ★
+        Best viewed at any resolution ★
+      </span>
+    </div>
+
+    <main class="desktop">
+      <section class="window main-window" aria-label="NetLab">
+        <div class="titlebar">
+          <span class="titlebar-icon" aria-hidden="true"></span>
+          <span class="titlebar-text">NETLAB.EXE</span>
+          <span class="titlebar-buttons" aria-hidden="true"><i>_</i><i>□</i><i>×</i></span>
+        </div>
+
+        <fieldset class="controls" id="controls">
+          <legend>Network conditions</legend>
+          <label class="control preset">
+            <span>Preset</span>
+            <select id="preset"></select>
+          </label>
+          <label class="control">
+            <span>Delay <output id="delay-out"></output></span>
+            <input type="range" id="delay" min="0" max="500" step="5" />
+          </label>
+          <label class="control">
+            <span>Jitter <output id="jitter-out"></output></span>
+            <input type="range" id="jitter" min="0" max="200" step="5" />
+          </label>
+          <label class="control">
+            <span>Loss <output id="loss-out"></output></span>
+            <input type="range" id="loss" min="0" max="60" step="1" />
+          </label>
+          <label class="control">
+            <span>Bandwidth</span>
+            <select id="bandwidth">
+              <option value="56">56 kbps (dial-up)</option>
+              <option value="256">256 kbps</option>
+              <option value="1000">1 Mbps</option>
+              <option value="10000">10 Mbps</option>
+              <option value="100000">100 Mbps</option>
+            </select>
+          </label>
+          <label class="control">
+            <span>Playback</span>
+            <select id="speed">
+              <option value="auto">Auto (about 8 s)</option>
+              <option value="0.25">0.25×</option>
+              <option value="1">1× real time</option>
+              <option value="4">4×</option>
+            </select>
+          </label>
+          <label class="control seed">
+            <span>Seed</span>
+            <span class="seed-row">
+              <input type="number" id="seed" min="0" max="999999" />
+              <label class="check" title="Use the same seed for every run, to repeat the same losses">
+                <input type="checkbox" id="lock-seed" /> lock
+              </label>
+            </span>
+          </label>
+        </fieldset>
+
+        <div class="tabs" role="tablist" aria-label="Experiments">
+          <button role="tab" id="tab-udp" aria-controls="panel-udp" aria-selected="true">UDP</button>
+          <button role="tab" id="tab-tcp" aria-controls="panel-tcp" aria-selected="false">TCP</button>
+          <button role="tab" id="tab-versus" aria-controls="panel-versus" aria-selected="false">UDP × TCP</button>
+          <button role="tab" id="tab-chat" aria-controls="panel-chat" aria-selected="false">Text</button>
+          <button role="tab" id="tab-media" aria-controls="panel-media" aria-selected="false">Text + content</button>
+          <button role="tab" id="tab-lab" aria-controls="panel-lab" aria-selected="false">Delay · jitter · loss</button>
+        </div>
+
+        <div class="panels">
+          <!-- UDP -->
+          <section class="panel" role="tabpanel" id="panel-udp" aria-labelledby="tab-udp">
+            <div class="intro">
+              <h2>UDP: fire and forget</h2>
+              <p>
+                UDP sends each datagram once. There is no connection, no acknowledgment, and no retransmission.
+                Datagrams can arrive late, out of order, or never. It is fast and simple, so apps like games, voice,
+                and video calls use it.
+              </p>
+            </div>
+            <div class="sender">
+              <label>Message <input class="field" id="udp-text" maxlength="400" /></label>
+              <label>Bytes per packet
+                <select class="field" id="udp-mss">
+                  <option value="8" selected>8</option><option value="12">12</option><option value="32">32</option>
+                </select>
+              </label>
+              <button class="btn btn-go" id="udp-send">Send ▸</button>
+            </div>
+            <div class="split">
+              <div class="crt" id="udp-ladder"></div>
+              <div class="side">
+                <div class="box">
+                  <h3>Receiver gets</h3>
+                  <p class="rebuilt" id="udp-rebuilt"></p>
+                  <p class="hint">Missing bytes show as ▒.</p>
+                </div>
+                <div class="box">
+                  <h3>Arrival order</h3>
+                  <div class="order" id="udp-order"></div>
+                </div>
+                <div class="box"><h3>Stats</h3><dl class="stats" id="udp-stats"></dl></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- TCP -->
+          <section class="panel" role="tabpanel" id="panel-tcp" aria-labelledby="tab-tcp" hidden>
+            <div class="intro">
+              <h2>TCP: reliable and in order</h2>
+              <p>
+                TCP opens a connection with a 3-way handshake (SYN, SYN-ACK, ACK). The receiver acknowledges the data,
+                and the sender retransmits what is lost. The app always gets the bytes in order, but a lost segment
+                makes the later data wait.
+              </p>
+            </div>
+            <div class="sender">
+              <label>Message <input class="field" id="tcp-text" maxlength="400" /></label>
+              <label>Bytes per segment
+                <select class="field" id="tcp-mss">
+                  <option value="8" selected>8</option><option value="12">12</option><option value="32">32</option>
+                </select>
+              </label>
+              <label>Window
+                <select class="field" id="tcp-window">
+                  <option value="1">1</option><option value="2">2</option><option value="4" selected>4</option><option value="8">8</option>
+                </select>
+              </label>
+              <button class="btn btn-go" id="tcp-send">Send ▸</button>
+            </div>
+            <div class="split">
+              <div class="crt" id="tcp-ladder"></div>
+              <div class="side">
+                <div class="box">
+                  <h3>App receives</h3>
+                  <p class="rebuilt" id="tcp-rebuilt"></p>
+                  <p class="hint">Text appears only in order.</p>
+                </div>
+                <div class="box">
+                  <h3>Events</h3>
+                  <ul class="events" id="tcp-events"></ul>
+                </div>
+                <div class="box"><h3>Stats</h3><dl class="stats" id="tcp-stats"></dl></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- UDP x TCP -->
+          <section class="panel" role="tabpanel" id="panel-versus" aria-labelledby="tab-versus" hidden>
+            <div class="intro">
+              <h2>UDP × TCP: same message, same network</h2>
+              <p>Both protocols send the same message over the same conditions. Compare speed, completeness, and cost.</p>
+            </div>
+            <div class="sender">
+              <label>Message <input class="field" id="versus-text" maxlength="400" /></label>
+              <button class="btn btn-go" id="versus-send">Race ▸</button>
+            </div>
+            <div class="versus">
+              <div class="versus-col">
+                <h3 class="proto udp">UDP</h3>
+                <div class="crt short" id="versus-udp-ladder"></div>
+                <p class="rebuilt" id="versus-udp-rebuilt"></p>
+              </div>
+              <div class="versus-col">
+                <h3 class="proto tcp">TCP</h3>
+                <div class="crt short" id="versus-tcp-ladder"></div>
+                <p class="rebuilt" id="versus-tcp-rebuilt"></p>
+              </div>
+            </div>
+            <table class="compare" id="versus-table"></table>
+          </section>
+
+          <!-- Text -->
+          <section class="panel" role="tabpanel" id="panel-chat" aria-labelledby="tab-chat" hidden>
+            <div class="intro">
+              <h2>Text: a chat over the network</h2>
+              <p>
+                Each line is one chat message. The sender sends a line every few milliseconds. With UDP, a message can
+                get lost or pass another one. With TCP, every message arrives, in order, but sometimes late.
+              </p>
+            </div>
+            <div class="sender">
+              <label class="grow">Messages, one per line <textarea class="field" id="chat-text" rows="4" maxlength="2000"></textarea></label>
+              <label>Every
+                <select class="field" id="chat-interval">
+                  <option value="10">10 ms</option><option value="30" selected>30 ms</option><option value="100">100 ms</option>
+                </select>
+              </label>
+              <button class="btn btn-go" id="chat-send">Send all ▸</button>
+            </div>
+            <div class="chat-grid">
+              <div class="chat-window">
+                <div class="chat-title">Sender</div>
+                <ol class="chat" id="chat-sender"></ol>
+              </div>
+              <div class="chat-window">
+                <div class="chat-title udp">Receiver over UDP</div>
+                <ol class="chat" id="chat-udp"></ol>
+              </div>
+              <div class="chat-window">
+                <div class="chat-title tcp">Receiver over TCP</div>
+                <ol class="chat" id="chat-tcp"></ol>
+              </div>
+            </div>
+            <div class="timeline" id="chat-clock"></div>
+          </section>
+
+          <!-- Text + content -->
+          <section class="panel" role="tabpanel" id="panel-media" aria-labelledby="tab-media" hidden>
+            <div class="intro">
+              <h2>Text + content: send a picture</h2>
+              <p>
+                A caption and a 48 × 48 image travel as one payload. Over UDP, lost packets leave holes in the
+                picture. Over TCP, the picture is always complete, but it fills from top to bottom and waits for every lost
+                piece.
+              </p>
+            </div>
+            <div class="sender">
+              <label>Caption <input class="field" id="media-caption" maxlength="120" /></label>
+              <label>Image
+                <select class="field" id="media-image">
+                  <option value="globe">Y2K globe</option>
+                  <option value="smiley">Smiley</option>
+                  <option value="sunset">Sunset</option>
+                  <option value="upload">Upload your own…</option>
+                </select>
+              </label>
+              <input type="file" id="media-file" accept="image/*" hidden />
+              <button class="btn btn-go" id="media-send">Send ▸</button>
+            </div>
+            <div class="media-grid">
+              <div class="media-card">
+                <h3>Original</h3>
+                <canvas id="media-original" width="48" height="48"></canvas>
+                <p class="caption" id="media-original-caption"></p>
+              </div>
+              <div class="media-card">
+                <h3 class="proto udp">UDP</h3>
+                <canvas id="media-udp" width="48" height="48"></canvas>
+                <p class="caption" id="media-udp-caption"></p>
+                <div class="strip" id="media-udp-strip"></div>
+                <div class="progress"><div class="progress-bar" id="media-udp-progress"></div></div>
+                <p class="small" id="media-udp-status"></p>
+              </div>
+              <div class="media-card">
+                <h3 class="proto tcp">TCP</h3>
+                <canvas id="media-tcp" width="48" height="48"></canvas>
+                <p class="caption" id="media-tcp-caption"></p>
+                <div class="strip" id="media-tcp-strip"></div>
+                <div class="progress"><div class="progress-bar" id="media-tcp-progress"></div></div>
+                <p class="small" id="media-tcp-status"></p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Delay, jitter, loss -->
+          <section class="panel" role="tabpanel" id="panel-lab" aria-labelledby="tab-lab" hidden>
+            <div class="intro">
+              <h2>Delay · jitter · loss</h2>
+              <p>
+                The sender sends 120 small UDP probes, one every 20 ms. Each dot is one probe: its height is the time it
+                took to arrive. Change the conditions above and see how the network behaves.
+              </p>
+            </div>
+            <div class="sender">
+              <button class="btn btn-go" id="lab-send">Send 120 probes ▸</button>
+            </div>
+            <div class="lab-grid">
+              <div class="box">
+                <h3>Latency of each probe</h3>
+                <canvas class="chart" id="lab-scatter" width="640" height="260"></canvas>
+              </div>
+              <div class="box">
+                <h3>Distribution</h3>
+                <canvas class="chart" id="lab-histogram" width="360" height="260"></canvas>
+              </div>
+            </div>
+            <div class="meters" id="lab-meters"></div>
+            <div class="glossary">
+              <div><b>Delay</b> The time that a packet needs to cross the network, one way.</div>
+              <div><b>Jitter</b> The change of the delay from packet to packet. NetLab measures it as in RFC 3550.</div>
+              <div><b>Loss</b> The share of packets that never arrive.</div>
+              <div><b>Bandwidth</b> How many bits per second the link sends. Large packets wait in a queue.</div>
+            </div>
+          </section>
+        </div>
+
+        <div class="statusbar">
+          <span id="status">Loading the Go runtime…</span>
+          <span id="status-seed"></span>
+        </div>
+      </section>
+
+      <section class="window about" id="about">
+        <div class="titlebar">
+          <span class="titlebar-icon" aria-hidden="true"></span>
+          <span class="titlebar-text">README.TXT</span>
+        </div>
+        <div class="about-body">
+          <p>
+            NetLab simulates a network in Go and runs in your browser with WebAssembly. Each run is deterministic: the same
+            seed and conditions give the same packets.
+          </p>
+          <p>
+            The TCP model is simplified, but it has the main parts of real TCP: the 3-way handshake, a sliding window,
+            cumulative ACKs, an adaptive retransmission timeout (RFC 6298), fast retransmit after 3 duplicate ACKs, and
+            connection close.
+          </p>
+          <p class="legend-row">
+            <span><i class="key dgram"></i>UDP datagram</span>
+            <span><i class="key data"></i>TCP data</span>
+            <span><i class="key ack"></i>ACK</span>
+            <span><i class="key ctrl"></i>SYN / FIN</span>
+            <span><i class="key retx"></i>Retransmission</span>
+            <span><i class="key lost">✕</i>Lost</span>
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span class="badge">Made with Go</span>
+      <span class="badge">WebAssembly inside</span>
+      <span class="badge">100% static</span>
+      <p>by <a href="https://github.com/rahelmartim" target="_blank" rel="noopener noreferrer">rahelmartim</a></p>
+    </footer>
+
+    <script src="wasm_exec.js"></script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
