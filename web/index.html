@@ -92,6 +92,41 @@
               </label>
             </span>
           </label>
+          <button type="button" class="btn btn-small" id="more-conditions" aria-expanded="false" aria-controls="advanced-conditions">More ▾</button>
+          <div class="advanced" id="advanced-conditions" hidden>
+            <label class="control">
+              <span>Loss pattern</span>
+              <select id="burst">
+                <option value="0">Independent</option>
+                <option value="2">Bursts of about 2</option>
+                <option value="4">Bursts of about 4</option>
+                <option value="8">Bursts of about 8</option>
+              </select>
+            </label>
+            <label class="control">
+              <span>Duplicates <output id="duplicate-out"></output></span>
+              <input type="range" id="duplicate" min="0" max="20" step="1" />
+            </label>
+            <label class="control">
+              <span>Router queue</span>
+              <select id="queue">
+                <option value="0">Unlimited</option>
+                <option value="4">4 packets</option>
+                <option value="8">8 packets</option>
+                <option value="16">16 packets</option>
+                <option value="32">32 packets</option>
+                <option value="64">64 packets</option>
+                <option value="200">200 packets (bufferbloat)</option>
+              </select>
+            </label>
+            <div class="control">
+              <span>
+                <label class="check"><input type="checkbox" id="asymmetric" /> Other return delay</label>
+                <output id="reverse-delay-out"></output>
+              </span>
+              <input type="range" id="reverse-delay" min="0" max="500" step="5" aria-label="Return delay" />
+            </div>
+          </div>
         </fieldset>
 
         <div class="tabs" role="tablist" aria-label="Experiments">
@@ -101,6 +136,11 @@
           <button role="tab" id="tab-chat" aria-controls="panel-chat" aria-selected="false">Text</button>
           <button role="tab" id="tab-media" aria-controls="panel-media" aria-selected="false">Text + content</button>
           <button role="tab" id="tab-lab" aria-controls="panel-lab" aria-selected="false">Delay · jitter · loss</button>
+          <button role="tab" id="tab-flavors" aria-controls="panel-flavors" aria-selected="false">TCP flavors</button>
+          <button role="tab" id="tab-optim" aria-controls="panel-optim" aria-selected="false">Optimizations</button>
+          <button role="tab" id="tab-bench" aria-controls="panel-bench" aria-selected="false">Workbench</button>
+          <button role="tab" id="tab-own" aria-controls="panel-own" aria-selected="false">Send your own</button>
+          <button role="tab" id="tab-builder" aria-controls="panel-builder" aria-selected="false">Build a protocol</button>
         </div>
 
         <div class="panels">
@@ -115,9 +155,9 @@
               </p>
             </div>
             <div class="sender">
-              <label>Message <input class="field" id="udp-text" maxlength="400" /></label>
+              <label>Message <input class="field" id="udp-text" data-share maxlength="400" /></label>
               <label>Bytes per packet
-                <select class="field" id="udp-mss">
+                <select class="field" id="udp-mss" data-share>
                   <option value="8" selected>8</option><option value="12">12</option><option value="32">32</option>
                 </select>
               </label>
@@ -151,14 +191,14 @@
               </p>
             </div>
             <div class="sender">
-              <label>Message <input class="field" id="tcp-text" maxlength="400" /></label>
+              <label>Message <input class="field" id="tcp-text" data-share maxlength="400" /></label>
               <label>Bytes per segment
-                <select class="field" id="tcp-mss">
+                <select class="field" id="tcp-mss" data-share>
                   <option value="8" selected>8</option><option value="12">12</option><option value="32">32</option>
                 </select>
               </label>
               <label>Window
-                <select class="field" id="tcp-window">
+                <select class="field" id="tcp-window" data-share>
                   <option value="1">1</option><option value="2">2</option><option value="4" selected>4</option><option value="8">8</option>
                 </select>
               </label>
@@ -188,7 +228,7 @@
               <p>Both protocols send the same message over the same conditions. Compare speed, completeness, and cost.</p>
             </div>
             <div class="sender">
-              <label>Message <input class="field" id="versus-text" maxlength="400" /></label>
+              <label>Message <input class="field" id="versus-text" data-share maxlength="400" /></label>
               <button class="btn btn-go" id="versus-send">Race ▸</button>
             </div>
             <div class="versus">
@@ -216,9 +256,9 @@
               </p>
             </div>
             <div class="sender">
-              <label class="grow">Messages, one per line <textarea class="field" id="chat-text" rows="4" maxlength="2000"></textarea></label>
+              <label class="grow">Messages, one per line <textarea class="field" id="chat-text" data-share rows="4" maxlength="2000"></textarea></label>
               <label>Every
-                <select class="field" id="chat-interval">
+                <select class="field" id="chat-interval" data-share>
                   <option value="10">10 ms</option><option value="30" selected>30 ms</option><option value="100">100 ms</option>
                 </select>
               </label>
@@ -252,7 +292,7 @@
               </p>
             </div>
             <div class="sender">
-              <label>Caption <input class="field" id="media-caption" maxlength="120" /></label>
+              <label>Caption <input class="field" id="media-caption" data-share maxlength="120" /></label>
               <label>Image
                 <select class="field" id="media-image">
                   <option value="globe">Y2K globe</option>
@@ -319,11 +359,251 @@
               <div><b>Bandwidth</b> How many bits per second the link sends. Large packets wait in a queue.</div>
             </div>
           </section>
+
+          <!-- TCP flavors -->
+          <section class="panel" role="tabpanel" id="panel-flavors" aria-labelledby="tab-flavors" hidden>
+            <div class="intro">
+              <h2>TCP flavors: congestion control</h2>
+              <p>
+                The congestion window (cwnd) is how much data TCP sends before it waits for ACKs. Each flavor grows and
+                cuts it in its own way. Send the same file with each one, over a link with a bottleneck.
+              </p>
+            </div>
+            <div class="sender">
+              <label>File size
+                <select class="field" id="flavors-size" data-share>
+                  <option value="50000">50 KB</option>
+                  <option value="150000" selected>150 KB</option>
+                  <option value="250000">250 KB</option>
+                </select>
+              </label>
+              <fieldset class="checks" id="flavors-list" data-share><legend>Flavors</legend></fieldset>
+              <label class="check"><input type="checkbox" id="flavors-sack" checked data-share /> SACK</label>
+              <button class="btn" id="flavors-preset" type="button">Use the bottleneck network</button>
+              <button class="btn btn-go" id="flavors-send">Run ▸</button>
+            </div>
+            <p class="hint" id="flavors-hint"></p>
+            <div class="box">
+              <h3>Congestion window over time <span class="muted">(segments)</span></h3>
+              <canvas class="chart" id="flavors-chart" width="1000" height="320"></canvas>
+              <div class="legend-row" id="flavors-legend"></div>
+            </div>
+            <table class="compare" id="flavors-table"></table>
+            <div class="cards" id="flavors-notes"></div>
+          </section>
+
+          <!-- Optimizations -->
+          <section class="panel" role="tabpanel" id="panel-optim" aria-labelledby="tab-optim" hidden>
+            <div class="intro">
+              <h2>Optimizations: what each switch saves</h2>
+              <p>
+                The same transfer runs with one TCP optimization at a time, over the same network and seed. The bars
+                show the time until the app has all the data. Shorter is better.
+              </p>
+            </div>
+            <div class="sender">
+              <label>Scenario
+                <select class="field" id="optim-scenario" data-share>
+                  <option value="request">Small request (2 KB)</option>
+                  <option value="page" selected>Web page (100 KB)</option>
+                  <option value="typing">Typing over SSH (60 keystrokes)</option>
+                  <option value="download">Download (250 KB)</option>
+                </select>
+              </label>
+              <label>Flavor
+                <select class="field" id="optim-flavor" data-share>
+                  <option value="newreno">NewReno</option>
+                  <option value="cubic" selected>CUBIC</option>
+                  <option value="bbr">BBR</option>
+                </select>
+              </label>
+              <button class="btn btn-go" id="optim-send">Run ▸</button>
+            </div>
+            <div class="box">
+              <h3>Time to deliver everything</h3>
+              <div class="bars" id="optim-bars"></div>
+            </div>
+            <div class="cards" id="optim-notes"></div>
+          </section>
+
+          <!-- Workbench -->
+          <section class="panel" role="tabpanel" id="panel-bench" aria-labelledby="tab-bench" hidden>
+            <div class="intro">
+              <h2>Workbench: every setting</h2>
+              <p>Set every parameter of the transfer, then inspect each packet in the capture, as in a packet sniffer.</p>
+            </div>
+            <div class="bench">
+              <form class="bench-form" id="bench-form">
+                <fieldset>
+                  <legend>Data</legend>
+                  <label>Protocol
+                    <select class="field" id="bench-protocol" data-share>
+                      <option value="tcp" selected>TCP</option>
+                      <option value="udp">UDP</option>
+                    </select>
+                  </label>
+                  <label>Text <textarea class="field" id="bench-text" rows="2" maxlength="2000" data-share></textarea></label>
+                  <label>Repeat the text
+                    <select class="field" id="bench-repeat" data-share>
+                      <option value="1">1 time</option><option value="20">20 times</option><option value="200" selected>200 times</option>
+                    </select>
+                  </label>
+                  <label>Bytes per packet (MSS) <input class="field" type="number" id="bench-mss" min="8" max="9000" value="512" data-share /></label>
+                </fieldset>
+                <fieldset class="tcp-only">
+                  <legend>TCP</legend>
+                  <label>Flavor
+                    <select class="field" id="bench-flavor" data-share>
+                      <option value="fixed">Fixed window</option>
+                      <option value="tahoe">Tahoe</option>
+                      <option value="reno">Reno</option>
+                      <option value="newreno" selected>NewReno</option>
+                      <option value="cubic">CUBIC</option>
+                      <option value="bbr">BBR</option>
+                    </select>
+                  </label>
+                  <label>Window (segments) <input class="field" type="number" id="bench-window" min="1" max="1024" value="64" data-share /></label>
+                  <label>Initial window <input class="field" type="number" id="bench-iw" min="1" max="100" value="3" data-share /></label>
+                  <label>Duplicate ACK threshold <input class="field" type="number" id="bench-dupthresh" min="1" max="20" value="3" data-share /></label>
+                  <label>Minimum RTO (ms) <input class="field" type="number" id="bench-minrto" min="1" max="5000" value="20" data-share /></label>
+                  <label>Maximum RTO (ms) <input class="field" type="number" id="bench-maxrto" min="10" max="60000" value="8000" data-share /></label>
+                  <label>First RTO (ms, 0 = auto) <input class="field" type="number" id="bench-initrto" min="0" max="60000" value="0" data-share /></label>
+                  <div class="checks">
+                    <label class="check"><input type="checkbox" id="bench-sack" data-share /> SACK</label>
+                    <label class="check"><input type="checkbox" id="bench-delack" data-share /> Delayed ACK</label>
+                    <label class="check"><input type="checkbox" id="bench-nagle" data-share /> Nagle</label>
+                    <label class="check"><input type="checkbox" id="bench-tfo" data-share /> Fast Open</label>
+                  </div>
+                </fieldset>
+                <div class="bench-actions">
+                  <button class="btn btn-go" id="bench-send" type="button">Run ▸</button>
+                  <button class="btn" id="bench-csv" type="button" disabled>Download capture (CSV)</button>
+                </div>
+              </form>
+              <div class="bench-results">
+                <div class="crt short" id="bench-ladder"></div>
+                <div class="box tcp-only">
+                  <h3>Congestion window <span class="muted">(segments)</span></h3>
+                  <canvas class="chart" id="bench-chart" width="800" height="200"></canvas>
+                </div>
+                <div class="box"><h3>Stats</h3><dl class="stats two-col" id="bench-stats"></dl></div>
+              </div>
+            </div>
+            <div class="capture">
+              <table id="bench-capture">
+                <thead>
+                  <tr><th>No.</th><th>Time</th><th>Source</th><th>Destination</th><th>Protocol</th><th>Length</th><th>Info</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- Send your own -->
+          <section class="panel" role="tabpanel" id="panel-own" aria-labelledby="tab-own" hidden>
+            <div class="intro">
+              <h2>Send your own file</h2>
+              <p>
+                Pick any file up to 256 KB, or type a text. It never leaves your computer: the simulator runs in this
+                page. Then download what the receiver got, and compare the checksums.
+              </p>
+            </div>
+            <div class="sender">
+              <label class="btn file-btn">Choose a file… <input type="file" id="own-file" /></label>
+              <label class="grow">or type a text <textarea class="field" id="own-text" rows="2" maxlength="20000" data-share></textarea></label>
+              <label>Send with
+                <select class="field" id="own-protocol" data-share>
+                  <option value="udp">UDP</option>
+                  <option value="newreno">TCP NewReno</option>
+                  <option value="cubic" selected>TCP CUBIC</option>
+                  <option value="bbr">TCP BBR</option>
+                  <option value="custom">My protocol (Build a protocol tab)</option>
+                </select>
+              </label>
+              <button class="btn btn-go" id="own-send">Send ▸</button>
+            </div>
+            <div class="own-grid">
+              <div class="box">
+                <h3 id="own-name">No file yet</h3>
+                <canvas class="chart" id="own-strip" width="640" height="180"></canvas>
+                <div class="progress wide"><div class="progress-bar" id="own-progress"></div></div>
+                <p class="small" id="own-status"></p>
+              </div>
+              <div class="side">
+                <div class="box">
+                  <h3>Checksums (SHA-256)</h3>
+                  <dl class="stats hashes" id="own-hashes"></dl>
+                  <button class="btn" id="own-download" type="button" disabled>Download received file</button>
+                </div>
+                <div class="box"><h3>Stats</h3><dl class="stats" id="own-stats"></dl></div>
+              </div>
+            </div>
+            <p class="rebuilt" id="own-preview" hidden></p>
+          </section>
+
+          <!-- Build a protocol -->
+          <section class="panel" role="tabpanel" id="panel-builder" aria-labelledby="tab-builder" hidden>
+            <div class="intro">
+              <h2>Build your own protocol</h2>
+              <p>Choose the parts of a transport protocol. Then race it against UDP and TCP over the same network.</p>
+            </div>
+            <div class="builder">
+              <form class="bench-form" id="builder-form">
+                <fieldset>
+                  <legend>Your protocol</legend>
+                  <label>Name <input class="field" id="builder-name" maxlength="24" value="RTP-2000" data-share /></label>
+                  <label class="check"><input type="checkbox" id="builder-handshake" data-share /> Handshake before data (HELLO)</label>
+                  <label>Reliability
+                    <select class="field" id="builder-reliability" data-share>
+                      <option value="none">None: send once</option>
+                      <option value="stop-and-wait">Stop-and-wait</option>
+                      <option value="go-back-n">Go-Back-N</option>
+                      <option value="selective-repeat" selected>Selective repeat</option>
+                    </select>
+                  </label>
+                  <label>Window (packets)
+                    <select class="field" id="builder-window" data-share>
+                      <option>1</option><option>2</option><option>4</option><option selected>8</option><option>16</option><option>32</option>
+                    </select>
+                  </label>
+                  <label>Timeout
+                    <select class="field" id="builder-timeout" data-share>
+                      <option value="0" selected>Adaptive (RFC 6298)</option>
+                      <option value="50">50 ms</option><option value="200">200 ms</option><option value="1000">1 s</option>
+                    </select>
+                  </label>
+                  <label class="check"><input type="checkbox" id="builder-ordered" checked data-share /> Deliver in order</label>
+                  <label>Forward error correction
+                    <select class="field" id="builder-fec" data-share>
+                      <option value="0">Off</option>
+                      <option value="2">1 parity per 2 packets</option>
+                      <option value="4" selected>1 parity per 4 packets</option>
+                      <option value="8">1 parity per 8 packets</option>
+                    </select>
+                  </label>
+                  <label>Bytes per packet
+                    <select class="field" id="builder-mss" data-share>
+                      <option selected>16</option><option>64</option><option>512</option>
+                    </select>
+                  </label>
+                </fieldset>
+                <label>Message <textarea class="field" id="builder-text" rows="3" maxlength="2000" data-share></textarea></label>
+                <div class="bench-actions"><button class="btn btn-go" id="builder-send" type="button">Race ▸</button></div>
+              </form>
+              <div class="bench-results">
+                <div class="protocol-card" id="builder-card"></div>
+                <div class="crt short" id="builder-ladder"></div>
+                <p class="rebuilt" id="builder-rebuilt"></p>
+              </div>
+            </div>
+            <table class="compare" id="builder-table"></table>
+          </section>
         </div>
 
         <div class="statusbar">
           <span id="status">Loading the Go runtime…</span>
           <span id="status-seed"></span>
+          <button class="btn btn-small" id="share" type="button" title="Copy a link to this tab, with the same network and seed">Copy link</button>
         </div>
       </section>
 

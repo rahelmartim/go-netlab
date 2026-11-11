@@ -3,6 +3,7 @@ package netsim
 import (
 	"bytes"
 	"errors"
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -160,10 +161,11 @@ func TestTCPMessagesLater(t *testing.T) {
 }
 
 func TestBandwidthSpacesPackets(t *testing.T) {
-	// 512 + 28 bytes at 1000 kbps take 4.32 ms.
+	// The payload has 1020 bytes: packets of 512 and 508 bytes. The second
+	// one arrives one transmission time later: (508 + 28) × 8 / 1000 ms.
 	r := simulate(t, Options{Protocol: UDP, Conditions: Conditions{BandwidthKbps: 1000}, Messages: payload(1024)})
-	if gap := r.Packets[1].SentAt - r.Packets[0].SentAt; gap < 4.31 || gap > 4.33 {
-		t.Errorf("gap between packets = %v ms, want 4.32", gap)
+	if gap := r.Packets[1].ArriveAt - r.Packets[0].ArriveAt; math.Abs(gap-4.288) > 0.001 {
+		t.Errorf("gap between arrivals = %v ms, want 4.288", gap)
 	}
 }
 
